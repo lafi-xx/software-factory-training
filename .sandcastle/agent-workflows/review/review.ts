@@ -5,6 +5,7 @@ import * as sandcastle from "@ai-hero/sandcastle";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import type { z } from "zod/v4";
 import { claudeAgent, required, writeJson } from "../shared/common";
+import { COMPLETION_SIGNAL, withFinishRules } from "../shared/finish";
 import { extractionPrompt } from "../shared/extraction-prompt";
 import { runWithExtraction } from "../shared/run-with-extraction";
 import { diffLines } from "./diff-lines";
@@ -23,7 +24,8 @@ const result = await runWithExtraction({
   agent: claudeAgent(),
   sandbox: noSandbox(),
   logging: { type: "stdout" },
-  promptFile: path.join(import.meta.dirname, "prompt.md"),
+  promptFile: withFinishRules(path.join(import.meta.dirname, "prompt.md")),
+  completionSignal: COMPLETION_SIGNAL,
   promptArgs: {
     PR_NUMBER: required("PR_NUMBER"),
     BRANCH: required("BRANCH"),
