@@ -17,8 +17,11 @@ export type SavedNote = { body: string; updatedAt: string } | null;
 export function LessonNote({ note }: { note: SavedNote }) {
   const fetcher = useFetcher<{ ok: boolean; error?: string }>();
   const [draft, setDraft] = useState(note?.body ?? "");
+  const [submittedDraft, setSubmittedDraft] = useState<string | null>(null);
   const isSaving = fetcher.state !== "idle";
-  const error = fetcher.data?.error;
+  // A save error is about the text that was sent; once the learner edits it,
+  // the error no longer applies.
+  const error = draft === submittedDraft ? fetcher.data?.error : undefined;
   const { length, status, canSave } = describeNoteDraft({
     draft,
     savedBody: note?.body ?? null,
@@ -37,7 +40,11 @@ export function LessonNote({ note }: { note: SavedNote }) {
           </span>
         </div>
 
-        <fetcher.Form method="post" className="space-y-2">
+        <fetcher.Form
+          method="post"
+          className="space-y-2"
+          onSubmit={() => setSubmittedDraft(draft)}
+        >
           <input type="hidden" name="intent" value="save-note" />
           <Textarea
             name="body"
@@ -82,11 +89,13 @@ function NoteFooter({
       <Button type="submit" size="sm" disabled={isSaving || !canSave}>
         {isSaving ? "Saving..." : "Save note"}
       </Button>
-      <NoteStatus
-        error={error}
-        unsaved={status === "unsaved"}
-        updatedAt={status === "saved" ? updatedAt : undefined}
-      />
+      <span aria-live="polite">
+        <NoteStatus
+          error={error}
+          unsaved={status === "unsaved"}
+          updatedAt={status === "saved" ? updatedAt : undefined}
+        />
+      </span>
       <span
         className={cn(
           "ml-auto text-xs",
@@ -108,7 +117,7 @@ function NoteStatus({
   unsaved: boolean;
   updatedAt: string | undefined;
 }) {
-  if (error) return <span className="text-sm text-destructive">{error}</span>;
+  if (error) return <span className="text-xs text-destructive">{error}</span>;
   if (unsaved)
     return (
       <span className="text-xs text-muted-foreground">Unsaved changes</span>
