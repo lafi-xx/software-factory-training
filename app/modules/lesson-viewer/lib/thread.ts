@@ -6,7 +6,7 @@ import { getCourseForLesson } from "./course";
 import { comments, users, UserRole } from "~/db/schema";
 import { asc, eq } from "drizzle-orm";
 
-export type CommentAuthor = {
+type CommentAuthor = {
   id: number;
   name: string;
   avatarUrl: string | null;
@@ -14,7 +14,7 @@ export type CommentAuthor = {
   isPlatformAdmin: boolean;
 };
 
-export type ThreadComment = {
+type ThreadComment = {
   id: number;
   body: Markdown;
   createdAt: string;
@@ -28,11 +28,8 @@ export function getCommentById(commentId: number) {
   return db.select().from(comments).where(eq(comments.id, commentId)).get();
 }
 
-export function getLessonThread(lessonId: number): ThreadComment[] {
-  const course = getCourseForLesson(lessonId);
-  if (!course) return [];
-
-  const rows = db
+function getLessonCommentRows(lessonId: number) {
+  return db
     .select({
       id: comments.id,
       body: comments.body,
@@ -50,8 +47,17 @@ export function getLessonThread(lessonId: number): ThreadComment[] {
     .where(eq(comments.lessonId, lessonId))
     .orderBy(asc(comments.createdAt), asc(comments.id))
     .all();
+}
 
-  const toThreadComment = (row: (typeof rows)[number]): ThreadComment => {
+export function getLessonThread(lessonId: number): ThreadComment[] {
+  const course = getCourseForLesson(lessonId);
+  if (!course) return [];
+
+  const rows = getLessonCommentRows(lessonId);
+
+  const toThreadComment = (
+    row: ReturnType<typeof getLessonCommentRows>[number]
+  ): ThreadComment => {
     const deleted = row.deletedAt !== null;
     return {
       id: row.id,

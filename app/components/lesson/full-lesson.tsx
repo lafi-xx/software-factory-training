@@ -17,15 +17,15 @@ import {
 import { formatDuration } from "~/lib/utils";
 import { YouTubePlayer } from "~/components/youtube-player";
 import { CurriculumSidebar } from "./curriculum-sidebar";
-import { LessonBreadcrumb } from "./locked-lesson";
+import { LessonBreadcrumb } from "./lesson-breadcrumb";
 import { QuizSection } from "./quiz-section";
 import type { Route } from "../../routes/+types/courses.$slug.lessons.$lessonId";
 
 type LessonLoaderData = Route.ComponentProps["loaderData"];
 
-export const AUTOPLAY_KEY = "cadence-autoplay";
+const AUTOPLAY_KEY = "cadence-autoplay";
 
-export function useAutoplay() {
+function useAutoplay() {
   const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
@@ -301,7 +301,7 @@ export function FullLesson({
   );
 }
 
-export function BookmarkToggle({ bookmarked }: { bookmarked: boolean }) {
+function BookmarkToggle({ bookmarked }: { bookmarked: boolean }) {
   const fetcher = useFetcher<{ ok: boolean }>();
   const isSaving = fetcher.state !== "idle";
 
