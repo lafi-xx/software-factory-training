@@ -1,6 +1,5 @@
 export {
   flattenCourseLessons,
-  getCourseForLesson,
   getCourseWithDetails,
   getLessonById,
   getModuleById,
@@ -18,6 +17,7 @@ export { getCommentById, getLessonThread, renderThread } from "./lib/thread";
 export {
   computeResult,
   getBestAttempt,
+  getLessonQuiz,
   getQuizByLessonId,
   getQuizWithQuestions,
 } from "./lib/quiz";

@@ -16,8 +16,6 @@ import { isBookmarked, toggleBookmark } from "~/lib/bookmarks.server";
 import { getNote, saveNote } from "~/lib/notes.server";
 import { MAX_NOTE_LENGTH } from "~/lib/notes";
 import { db } from "~/db";
-import { quizzes } from "~/db/schema";
-import { eq } from "drizzle-orm";
 import { Button } from "~/components/ui/button";
 import { AlertTriangle } from "lucide-react";
 import { renderMarkdown } from "~/lib/markdown.server";
@@ -35,6 +33,7 @@ import {
   getLessonById,
   getLessonProgress,
   getLessonProgressForCourse,
+  getLessonQuiz,
   getLessonThread,
   getModuleById,
   getQuizByLessonId,
@@ -69,6 +68,31 @@ const saveNoteSchema = z.object({
       `Your note is over ${MAX_NOTE_LENGTH.toLocaleString("en")} characters, so it was not saved.`
     ),
 });
+
+const submitQuizSchema = z.object({
+  quizId: z.coerce.number().int().positive(),
+});
+
+const quizAnswerSchema = z.tuple([
+  z
+    .string()
+    .regex(/^question-\d+$/)
+    .transform((key) => Number(key.slice(9))),
+  z.coerce.number().int().positive(),
+]);
+
+/**
+ * The chosen option per question, from fields named `question-{questionId}`
+ * whose value is the option id. Malformed fields are ignored.
+ */
+function parseQuizAnswers(formData: FormData): Record<number, number> {
+  const answers: Record<number, number> = {};
+  for (const entry of formData.entries()) {
+    const parsed = quizAnswerSchema.safeParse(entry);
+    if (parsed.success) answers[parsed.data[0]] = parsed.data[1];
+  }
+  return answers;
+}
 
 const deleteCommentSchema = z.object({
   intent: z.literal("delete-comment"),
@@ -165,12 +189,10 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     // Progress is recorded only for people who can take the course, so a
     // Student under a Country Lock gets none.
     if (take.allowed) {
-      // Mark lesson as in-progress when viewed
       markLessonInProgress(currentUserId, lessonId);
       const progress = getLessonProgress(currentUserId, lessonId);
       lessonStatus = progress?.status ?? null;
 
-      // Get progress for all lessons in course (for curriculum sidebar)
       const progressRecords = getLessonProgressForCourse(
         currentUserId,
         course.id
@@ -179,7 +201,6 @@ export async function loader({ params, request }: Route.LoaderArgs) {
         lessonProgressMap[record.lessonId] = record.status;
       }
 
-      // Get video watch state for resume and progress display
       if (lesson.videoUrl) {
         lastWatchPosition = getLastWatchPosition(currentUserId, lessonId);
         const videoDurationSeconds = (lesson.durationMinutes ?? 0) * 60;
@@ -204,19 +225,16 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     : false;
   const note = currentUserId ? getNote(db, currentUserId, lessonId) : undefined;
 
-  // Render lesson content from Markdown to HTML server-side
   const contentHtml = lesson.content
     ? await renderMarkdown(lesson.content)
     : null;
 
-  // Build prev/next navigation
   const allLessons = flattenCourseLessons(courseWithDetails);
   const currentIndex = allLessons.findIndex((l) => l.id === lessonId);
   const prevLesson = currentIndex > 0 ? allLessons[currentIndex - 1] : null;
   const nextLesson =
     currentIndex < allLessons.length - 1 ? allLessons[currentIndex + 1] : null;
 
-  // Check for quiz attached to this lesson
   const quizRecord = getQuizByLessonId(lessonId);
   let quiz: {
     id: number;
@@ -419,33 +437,23 @@ export async function action({ params, request }: Route.ActionArgs) {
   }
 
   if (intent === "mark-complete") {
-    markLessonComplete(currentUserId, lessonId);
+    markLessonComplete(currentUserId, lessonId, new Date());
     return { success: true };
   }
 
   if (intent === "submit-quiz") {
-    const quizId = Number(formData.get("quizId"));
-    if (isNaN(quizId)) {
+    const parsed = submitQuizSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
       throw data("Invalid quiz ID", { status: 400 });
     }
+    const { quizId } = parsed.data;
     // Scope the quiz to this lesson so a quiz elsewhere can't be reached by
     // posting its id to this route.
-    const quiz = db.select().from(quizzes).where(eq(quizzes.id, quizId)).get();
-    if (!quiz || quiz.lessonId !== lessonId) {
+    if (!getLessonQuiz(lessonId, quizId)) {
       throw data("Quiz not found", { status: 404 });
     }
 
-    // Collect answers: form fields named "question-{questionId}" with value = optionId
-    const selectedAnswers: Record<number, number> = {};
-    for (const [key, value] of formData.entries()) {
-      if (key.startsWith("question-")) {
-        const questionId = Number(key.replace("question-", ""));
-        const optionId = Number(value);
-        if (!isNaN(questionId) && !isNaN(optionId)) {
-          selectedAnswers[questionId] = optionId;
-        }
-      }
-    }
+    const selectedAnswers = parseQuizAnswers(formData);
 
     const result = computeResult(currentUserId, quizId, selectedAnswers);
     if (!result) {
