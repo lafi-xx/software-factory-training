@@ -13,7 +13,7 @@ describe("describeNoteDraft", () => {
   it("treats whitespace alone as empty", () => {
     expect(
       describeNoteDraft({ draft: "   ", savedBody: null, maxLength })
-    ).toEqual({ length: 3, status: "empty", canSave: false });
+    ).toEqual({ length: 0, status: "empty", canSave: false });
   });
 
   it("is unsaved when the text differs from the saved note", () => {
@@ -50,5 +50,21 @@ describe("describeNoteDraft", () => {
     expect(
       describeNoteDraft({ draft: "a".repeat(11), savedBody: null, maxLength })
     ).toEqual({ length: 11, status: "too-long", canSave: false });
+  });
+
+  it("is saved when the draft differs from the saved note only by surrounding whitespace", () => {
+    expect(
+      describeNoteDraft({ draft: " same\n", savedBody: "same", maxLength })
+    ).toEqual({ length: 4, status: "saved", canSave: false });
+  });
+
+  it("does not count surrounding whitespace towards the maximum", () => {
+    expect(
+      describeNoteDraft({
+        draft: `${"a".repeat(10)}\n`,
+        savedBody: null,
+        maxLength,
+      })
+    ).toEqual({ length: 10, status: "unsaved", canSave: true });
   });
 });
